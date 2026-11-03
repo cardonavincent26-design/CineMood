@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import CORS_ORIGINS
-from .routers import auth, contenidos
+from .routers import auth, contenidos, recomendaciones
 
 app = FastAPI(title="CineMood API", version="0.1.0")
 
@@ -18,6 +18,7 @@ if CORS_ORIGINS:
 
 app.include_router(auth.router)
 app.include_router(contenidos.router)
+app.include_router(recomendaciones.router)
 
 
 @app.get("/", tags=["Estado"])

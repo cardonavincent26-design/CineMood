@@ -39,3 +39,7 @@ class ContenidoOut(BaseModel):
     valoracion: float
     sinopsis: str
     imagen_url: Optional[str] = None
+
+
+class RecomendacionOut(ContenidoOut):
+    compatibilidad: int  # porcentaje 0-99
