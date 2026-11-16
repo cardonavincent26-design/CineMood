@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/recomendacion.dart';
 import '../utils/colores.dart';
+import 'poster.dart';
 
 /// Tarjeta vertical del carrusel "Recomendado para ti", con el % de compatibilidad.
 class RecomendacionCard extends StatelessWidget {
@@ -21,34 +22,23 @@ class RecomendacionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colores.superficie,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Stack(
-                  children: [
-                    const Center(
-                      child: Icon(Icons.movie_creation_outlined,
-                          size: 34, color: Colores.textoSecundario),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colores.primario,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text('${recomendacion.compatibilidad}%',
-                            style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)),
+              child: Stack(
+                children: [
+                  Positioned.fill(child: Poster(url: c.imagenUrl, radio: 12, tamanoIcono: 34)),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colores.primario,
+                        borderRadius: BorderRadius.circular(20),
                       ),
+                      child: Text('${recomendacion.compatibilidad}%',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 6),

@@ -6,7 +6,7 @@ import '../utils/colores.dart';
 import '../utils/rutas.dart';
 import '../widgets/recomendacion_card.dart';
 
-/// Pantalla 5 · ¿Qué quieres ver hoy? (recomendaciones por mood).
+/// Pantalla 5 · ¿Qué quieres ver hoy? (recomendaciones por mood, calculadas por la API).
 class InicioScreen extends StatefulWidget {
   const InicioScreen({super.key});
 
@@ -18,13 +18,73 @@ class _InicioScreenState extends State<InicioScreen> {
   int _desplazamiento = 0; // permite pedir "otra recomendación" (RF-010)
 
   @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final app = context.read<AppProvider>();
+      if (app.recomendaciones.isEmpty && !app.cargandoRecomendaciones) {
+        app.cargarRecomendaciones();
+      }
+    });
+  }
+
+  Widget _contenido(AppProvider app) {
     final todas = app.recomendaciones;
     final n = todas.length;
-    final visibles = n == 0
-        ? todas
-        : [for (var i = 0; i < n && i < 5; i++) todas[(i + _desplazamiento) % n]];
+
+    if (app.cargandoRecomendaciones && n == 0) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Buscando recomendaciones...\n(la primera vez puede tardar hasta un minuto)',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colores.textoSecundario, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+    if (app.errorRecomendaciones != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(app.errorRecomendaciones!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colores.textoSecundario)),
+            TextButton(
+              onPressed: () => context.read<AppProvider>().cargarRecomendaciones(),
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (n == 0) {
+      return const Center(
+        child: Text('No hay contenido para tus preferencias.',
+            style: TextStyle(color: Colores.textoSecundario)),
+      );
+    }
+
+    final visibles = [for (var i = 0; i < n && i < 5; i++) todas[(i + _desplazamiento) % n]];
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: visibles.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 12),
+      itemBuilder: (_, i) => RecomendacionCard(
+        recomendacion: visibles[i],
+        onTap: () =>
+            Navigator.pushNamed(context, Rutas.detalle, arguments: visibles[i].contenido),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
@@ -67,22 +127,7 @@ class _InicioScreenState extends State<InicioScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Expanded(
-            child: visibles.isEmpty
-                ? const Center(
-                    child: Text('No hay contenido para tus preferencias.',
-                        style: TextStyle(color: Colores.textoSecundario)))
-                : ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: visibles.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (_, i) => RecomendacionCard(
-                      recomendacion: visibles[i],
-                      onTap: () => Navigator.pushNamed(context, Rutas.detalle,
-                          arguments: visibles[i].contenido),
-                    ),
-                  ),
-          ),
+          Expanded(child: _contenido(app)),
           const SizedBox(height: 12),
           const Text('Porque coincide con tus gustos y tu estado de ánimo.',
               style: TextStyle(color: Colores.textoSecundario, fontSize: 11)),

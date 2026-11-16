@@ -6,17 +6,31 @@ import '../providers/app_provider.dart';
 import '../utils/colores.dart';
 import '../utils/formatos.dart';
 import '../widgets/boton_primario.dart';
+import '../widgets/poster.dart';
 
-/// Pantalla 7 · Detalle de película o serie, con % de compatibilidad.
-class DetalleScreen extends StatelessWidget {
+/// Pantalla 7 · Detalle de película o serie, con póster y % de compatibilidad (calculado por la API).
+class DetalleScreen extends StatefulWidget {
   final Contenido contenido;
   const DetalleScreen({super.key, required this.contenido});
 
   @override
+  State<DetalleScreen> createState() => _DetalleScreenState();
+}
+
+class _DetalleScreenState extends State<DetalleScreen> {
+  late final Future<int> _compatibilidad;
+
+  @override
+  void initState() {
+    super.initState();
+    _compatibilidad = context.read<AppProvider>().compatibilidadDe(widget.contenido);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final contenido = widget.contenido;
     final app = context.watch<AppProvider>();
     final enLista = app.estaEnLista(contenido);
-    final compat = app.compatibilidadDe(contenido);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Detalle')),
@@ -25,15 +39,9 @@ class DetalleScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 200,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colores.superficie,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.movie_creation_outlined,
-                  size: 54, color: Colores.textoSecundario),
+            Center(
+              child: Poster(
+                  url: contenido.imagenUrl, ancho: 220, alto: 330, radio: 14, tamanoIcono: 54),
             ),
             const SizedBox(height: 20),
             Text(contenido.titulo,
@@ -60,7 +68,8 @@ class DetalleScreen extends StatelessWidget {
                       context.read<AppProvider>().marcarComoVisto(contenido);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content: Text('Agregado a tu historial (CineMood no reproduce contenido)')),
+                            content: Text(
+                                'Agregado a tu historial (CineMood no reproduce contenido)')),
                       );
                     },
                   ),
@@ -77,18 +86,39 @@ class DetalleScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 22),
-            Text('Compatibilidad contigo: $compat%',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: compat / 100,
-                minHeight: 8,
-                backgroundColor: Colores.superficie,
-                color: Colores.primario,
-              ),
+            FutureBuilder<int>(
+              future: _compatibilidad,
+              builder: (context, snap) {
+                if (snap.hasError) {
+                  return const Text('No se pudo calcular la compatibilidad.',
+                      style: TextStyle(color: Colores.textoSecundario));
+                }
+                final compat = snap.data;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        compat == null
+                            ? 'Calculando compatibilidad...'
+                            : 'Compatibilidad contigo: $compat%',
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: compat == null ? null : compat / 100,
+                        minHeight: 8,
+                        backgroundColor: Colores.superficie,
+                        color: Colores.primario,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
+            const SizedBox(height: 24),
+            const Text('Datos e imágenes: TMDB',
+                style: TextStyle(color: Colores.textoSecundario, fontSize: 10)),
             const SizedBox(height: 24),
           ],
         ),

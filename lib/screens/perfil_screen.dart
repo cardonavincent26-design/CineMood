@@ -76,10 +76,17 @@ class PerfilScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           BotonPrimario(
+            texto: 'Créditos y atribución',
+            secundario: true,
+            onPressed: () => Navigator.pushNamed(context, Rutas.creditos),
+          ),
+          const SizedBox(height: 10),
+          BotonPrimario(
             texto: 'Cerrar sesión',
             secundario: true,
-            onPressed: () {
-              context.read<AppProvider>().cerrarSesion();
+            onPressed: () async {
+              await context.read<AppProvider>().cerrarSesion();
+              if (!context.mounted) return;
               Navigator.pushNamedAndRemoveUntil(context, Rutas.login, (_) => false);
             },
           ),

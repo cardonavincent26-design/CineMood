@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../data/catalogo_data.dart';
 import '../models/contenido.dart';
 import '../models/estado_animo.dart';
 import '../providers/app_provider.dart';
+import '../services/api_service.dart';
 import '../utils/colores.dart';
 import '../utils/rutas.dart';
 import '../widgets/contenido_card.dart';
 
-/// Pantalla 6 · Explorar (búsqueda + filtros).
+/// Pantalla 6 · Explorar (búsqueda + filtros). La búsqueda y los filtros se hacen en la API.
+/// Si el título no está en nuestra base, se puede buscar en TMDB (la API lo guarda).
 class ExplorarScreen extends StatefulWidget {
   const ExplorarScreen({super.key});
 
@@ -24,22 +27,80 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   int? _duracionMax; // en minutos
   EstadoAnimo? _animo;
 
-  bool _cumple(Contenido c) {
-    if (_busqueda.isNotEmpty &&
-        !c.titulo.toLowerCase().contains(_busqueda.toLowerCase())) {
-      return false;
+  List<Contenido> _resultados = [];
+  bool _cargando = false;
+  String? _error;
+  Timer? _espera;
+  int _version = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppProvider>().cargarGeneros();
+      _buscar();
+    });
+  }
+
+  @override
+  void dispose() {
+    _espera?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _consultar(Future<List<Contenido>> Function() pedir) async {
+    final mia = ++_version;
+    setState(() {
+      _cargando = true;
+      _error = null;
+    });
+    try {
+      final r = await pedir();
+      if (!mounted || mia != _version) return;
+      setState(() {
+        _resultados = r;
+        _cargando = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted || mia != _version) return;
+      setState(() {
+        _error = e.mensaje;
+        _cargando = false;
+      });
     }
-    if (_genero != null && c.genero != _genero) return false;
-    if (_tipo != null && c.tipo != _tipo) return false;
-    if (_duracionMax != null && c.duracionMin > _duracionMax!) return false;
-    if (_animo != null && (c.afinidadAnimo[_animo!.name] ?? 0) < 0.6) return false;
-    return true;
+  }
+
+  Future<void> _buscar() {
+    final api = context.read<AppProvider>().api;
+    final q = _busqueda.trim();
+    return _consultar(() => api.contenidos(
+          q: q.isEmpty ? null : q,
+          tipo: _tipo,
+          genero: _genero,
+          duracionMax: _duracionMax,
+          animo: _animo,
+        ));
+  }
+
+  Future<void> _buscarEnTmdb() {
+    final api = context.read<AppProvider>().api;
+    return _consultar(() => api.buscarEnTmdb(_busqueda.trim(), _tipo));
+  }
+
+  void _alEscribir(String texto) {
+    setState(() => _busqueda = texto);
+    _espera?.cancel();
+    _espera = Timer(const Duration(milliseconds: 500), _buscar);
+  }
+
+  void _cambiarFiltro(VoidCallback cambio) {
+    setState(cambio);
+    _buscar();
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final resultados = app.catalogo.where(_cumple).toList();
+    final generos = context.watch<AppProvider>().generos;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
@@ -50,7 +111,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
           const SizedBox(height: 14),
           TextField(
-            onChanged: (v) => setState(() => _busqueda = v),
+            onChanged: _alEscribir,
             decoration: InputDecoration(
               hintText: 'Buscar película o serie...',
               hintStyle: const TextStyle(color: Colores.textoSecundario, fontSize: 13),
@@ -70,8 +131,8 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                 _Filtro<String>(
                   etiqueta: 'Género',
                   valor: _genero,
-                  opciones: {for (final g in generosDisponibles) g: g},
-                  onChanged: (v) => setState(() => _genero = v),
+                  opciones: {for (final g in generos) g: g},
+                  onChanged: (v) => _cambiarFiltro(() => _genero = v),
                 ),
                 _Filtro<int>(
                   etiqueta: 'Duración',
@@ -82,40 +143,66 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                     'Hasta 120 min': 120,
                     'Hasta 3 h': 180,
                   },
-                  onChanged: (v) => setState(() => _duracionMax = v),
+                  onChanged: (v) => _cambiarFiltro(() => _duracionMax = v),
                 ),
                 _Filtro<TipoContenido>(
                   etiqueta: 'Tipo',
                   valor: _tipo,
                   opciones: {for (final t in TipoContenido.values) t.etiqueta: t},
-                  onChanged: (v) => setState(() => _tipo = v),
+                  onChanged: (v) => _cambiarFiltro(() => _tipo = v),
                 ),
                 _Filtro<EstadoAnimo>(
                   etiqueta: 'Estado de ánimo',
                   valor: _animo,
                   opciones: {for (final e in EstadoAnimo.values) e.etiqueta: e},
-                  onChanged: (v) => setState(() => _animo = v),
+                  onChanged: (v) => _cambiarFiltro(() => _animo = v),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          Text('Resultados (${resultados.length})',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Resultados (${_resultados.length})',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              if (_busqueda.trim().length >= 2)
+                TextButton(
+                  onPressed: _cargando ? null : _buscarEnTmdb,
+                  child: const Text('Buscar en TMDB', style: TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
           const SizedBox(height: 6),
           Expanded(
-            child: resultados.isEmpty
-                ? const Center(
-                    child: Text('Sin resultados',
-                        style: TextStyle(color: Colores.textoSecundario)))
-                : ListView.builder(
-                    itemCount: resultados.length,
-                    itemBuilder: (_, i) => ContenidoCard(
-                      contenido: resultados[i],
-                      onTap: () => Navigator.pushNamed(context, Rutas.detalle,
-                          arguments: resultados[i]),
-                    ),
-                  ),
+            child: _cargando
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colores.textoSecundario)),
+                            TextButton(onPressed: _buscar, child: const Text('Reintentar')),
+                          ],
+                        ),
+                      )
+                    : _resultados.isEmpty
+                        ? const Center(
+                            child: Text(
+                                'Sin resultados.\nPrueba con "Buscar en TMDB" si no lo encuentras.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colores.textoSecundario)))
+                        : ListView.builder(
+                            itemCount: _resultados.length,
+                            itemBuilder: (_, i) => ContenidoCard(
+                              contenido: _resultados[i],
+                              onTap: () => Navigator.pushNamed(context, Rutas.detalle,
+                                  arguments: _resultados[i]),
+                            ),
+                          ),
           ),
         ],
       ),
@@ -140,9 +227,8 @@ class _Filtro<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activo = valor != null;
-    final textoActivo = activo
-        ? opciones.entries.firstWhere((e) => e.value == valor).key
-        : etiqueta;
+    final textoActivo =
+        activo ? opciones.entries.firstWhere((e) => e.value == valor).key : etiqueta;
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -164,8 +250,7 @@ class _Filtro<T> extends StatelessWidget {
           ),
           child: Text(textoActivo,
               style: TextStyle(
-                  fontSize: 12,
-                  color: activo ? Colors.white : Colores.textoSecundario)),
+                  fontSize: 12, color: activo ? Colors.white : Colores.textoSecundario)),
         ),
       ),
     );

@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/contenido.dart';
 import '../utils/colores.dart';
 import '../utils/formatos.dart';
+import 'poster.dart';
 
-/// Fila de contenido: miniatura + título + datos. Se usa en Explorar,
+/// Fila de contenido: póster + título + datos. Se usa en Explorar,
 /// Mi lista e Historial.
 class ContenidoCard extends StatelessWidget {
   final Contenido contenido;
@@ -27,21 +28,15 @@ class ContenidoCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colores.superficie,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.movie_outlined, color: Colores.textoSecundario),
-            ),
+            Poster(url: contenido.imagenUrl, ancho: 52, alto: 76, radio: 8, tamanoIcono: 22),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(contenido.titulo,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 2),
                   Text(

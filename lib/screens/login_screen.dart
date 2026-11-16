@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
+import '../services/api_service.dart';
 import '../utils/colores.dart';
 import '../utils/rutas.dart';
 import '../widgets/boton_primario.dart';
 import '../widgets/campo_texto.dart';
 
-/// Pantalla 1 · Inicio de sesión.
+/// Pantalla 1 · Inicio de sesión (autentica contra la API y guarda el token JWT).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,6 +19,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _correo = TextEditingController();
   final _clave = TextEditingController();
+  bool _cargando = false;
 
   @override
   void dispose() {
@@ -26,15 +28,24 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _iniciarSesion() {
+  void _aviso(String texto) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+
+  Future<void> _iniciarSesion() async {
     if (_correo.text.trim().isEmpty || _clave.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa tu correo y contraseña')),
-      );
+      _aviso('Ingresa tu correo y contraseña');
       return;
     }
-    context.read<AppProvider>().iniciarSesion(_correo.text.trim());
-    Navigator.pushReplacementNamed(context, Rutas.mood);
+    setState(() => _cargando = true);
+    try {
+      await context.read<AppProvider>().iniciarSesion(_correo.text.trim(), _clave.text);
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, Rutas.mood);
+    } on ApiException catch (e) {
+      if (mounted) _aviso(e.mensaje);
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 
   @override
@@ -70,12 +81,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              BotonPrimario(texto: 'Iniciar sesión', onPressed: _iniciarSesion),
+              BotonPrimario(
+                texto: _cargando ? 'Entrando...' : 'Iniciar sesión',
+                onPressed: _cargando ? null : _iniciarSesion,
+              ),
+              if (_cargando)
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Si hace rato no se usa, el servidor puede tardar hasta un minuto en despertar.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colores.textoSecundario, fontSize: 11),
+                  ),
+                ),
               const SizedBox(height: 10),
               BotonPrimario(
                 texto: 'Crear una cuenta',
                 secundario: true,
-                onPressed: () => Navigator.pushNamed(context, Rutas.registro),
+                onPressed: _cargando
+                    ? null
+                    : () => Navigator.pushNamed(context, Rutas.registro),
               ),
               const SizedBox(height: 60),
               const Text('Recomendaciones por estado de ánimo, gustos y tiempo.',

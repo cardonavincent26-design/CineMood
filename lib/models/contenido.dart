@@ -16,7 +16,10 @@ class Contenido {
   final double valoracion;
   final String sinopsis;
 
-  /// Cuánto encaja con cada estado de ánimo (0.0 a 1.0), por nombre del enum.
+  /// URL del póster (viene de TMDB). Puede ser null.
+  final String? imagenUrl;
+
+  /// Solo lo usa el catálogo de ejemplo antiguo (data/catalogo_data.dart); la API ya no lo envía.
   final Map<String, double> afinidadAnimo;
 
   const Contenido({
@@ -28,6 +31,19 @@ class Contenido {
     required this.duracionMin,
     required this.valoracion,
     required this.sinopsis,
-    required this.afinidadAnimo,
+    this.imagenUrl,
+    this.afinidadAnimo = const {},
   });
+
+  factory Contenido.fromJson(Map<String, dynamic> j) => Contenido(
+        id: j['id'] as int,
+        titulo: j['titulo'] as String,
+        tipo: TipoContenido.values.firstWhere((t) => t.name == j['tipo']),
+        genero: j['genero'] as String,
+        anio: j['anio'] as int,
+        duracionMin: j['duracion_min'] as int,
+        valoracion: (j['valoracion'] as num).toDouble(),
+        sinopsis: j['sinopsis'] as String,
+        imagenUrl: j['imagen_url'] as String?,
+      );
 }

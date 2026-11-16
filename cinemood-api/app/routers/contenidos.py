@@ -7,6 +7,7 @@ from sqlalchemy import text
 from ..database import get_db
 from ..deps import usuario_actual
 from ..schemas import ContenidoOut
+from .recomendaciones import EstadoAnimo
 
 router = APIRouter(tags=["Catálogo"], dependencies=[Depends(usuario_actual)])
 
@@ -24,6 +25,7 @@ def listar(
     tipo: Optional[Literal["pelicula", "serie"]] = None,
     genero: Optional[str] = Query(None, description="Nombre del género, ej. Drama"),
     duracion_max: Optional[int] = Query(None, ge=1),
+    animo: Optional[EstadoAnimo] = Query(None, description="Solo títulos con afinidad alta (≥ 0.6) con este ánimo"),
     valoracion_min: Optional[float] = Query(None, ge=0, le=5),
     limite: int = Query(50, ge=1, le=100),
     desde: int = Query(0, ge=0),
@@ -47,6 +49,12 @@ def listar(
         params["valoracion_min"] = valoracion_min
 
     sql = SELECT_BASE
+    if animo:
+        sql += (
+            " JOIN afinidad_animo af ON af.contenido_id = c.id AND af.afinidad >= 0.6"
+            " JOIN estados_animo ea ON ea.id = af.estado_animo_id AND ea.codigo = :animo"
+        )
+        params["animo"] = animo
     if condiciones:
         sql += " WHERE " + " AND ".join(condiciones)
     sql += " ORDER BY c.valoracion DESC, c.titulo LIMIT :limite OFFSET :desde"

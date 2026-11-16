@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../data/catalogo_data.dart';
 import '../models/contenido.dart';
 import '../models/preferencias.dart';
 import '../providers/app_provider.dart';
@@ -11,7 +10,7 @@ import '../widgets/boton_primario.dart';
 import '../widgets/chip_opcion.dart';
 
 /// Pantalla 3 · Conozcamos tus gustos (géneros, tipo de contenido, tiempo).
-/// Si [edicion] es true, vuelve a la pantalla anterior al guardar.
+/// Los géneros vienen de la API. Si [edicion] es true, vuelve a la pantalla anterior al guardar.
 class GustosScreen extends StatefulWidget {
   final bool edicion;
   const GustosScreen({super.key, this.edicion = false});
@@ -28,10 +27,12 @@ class _GustosScreenState extends State<GustosScreen> {
   @override
   void initState() {
     super.initState();
-    final p = context.read<AppProvider>().preferencias;
+    final app = context.read<AppProvider>();
+    final p = app.preferencias;
     _generos = {...p.generos};
     _tipo = p.tipo;
     _tiempo = p.tiempo;
+    app.cargarGeneros();
   }
 
   void _continuar() {
@@ -47,6 +48,8 @@ class _GustosScreenState extends State<GustosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final generosApi = context.watch<AppProvider>().generos;
+
     return Scaffold(
       appBar: widget.edicion ? AppBar(title: const Text('Editar preferencias')) : null,
       body: SafeArea(
@@ -66,24 +69,38 @@ class _GustosScreenState extends State<GustosScreen> {
                     style: TextStyle(color: Colores.textoSecundario, fontSize: 12)),
               ),
               const SizedBox(height: 28),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 3.6,
-                children: [
-                  for (final g in generosDisponibles)
-                    ChipOpcion(
-                      texto: g,
-                      seleccionado: _generos.contains(g),
-                      onTap: () => setState(() {
-                        _generos.contains(g) ? _generos.remove(g) : _generos.add(g);
-                      }),
-                    ),
-                ],
-              ),
+              if (generosApi.isEmpty)
+                Center(
+                  child: Column(
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () => context.read<AppProvider>().cargarGeneros(),
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 3.6,
+                  children: [
+                    for (final g in generosApi)
+                      ChipOpcion(
+                        texto: g,
+                        seleccionado: _generos.contains(g),
+                        onTap: () => setState(() {
+                          _generos.contains(g) ? _generos.remove(g) : _generos.add(g);
+                        }),
+                      ),
+                  ],
+                ),
               const SizedBox(height: 24),
               const Text('Tipo de contenido', style: TextStyle(fontSize: 13)),
               const SizedBox(height: 10),

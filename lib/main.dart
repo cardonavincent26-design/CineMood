@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'models/contenido.dart';
 import 'providers/app_provider.dart';
+import 'screens/creditos_screen.dart';
 import 'screens/detalle_screen.dart';
 import 'screens/gustos_screen.dart';
 import 'screens/historial_screen.dart';
@@ -11,25 +12,31 @@ import 'screens/mood_screen.dart';
 import 'screens/principal_screen.dart';
 import 'screens/registro_screen.dart';
 import 'utils/colores.dart';
+import 'utils/navegador.dart';
 import 'utils/rutas.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final app = AppProvider();
+  await app.restaurarSesion(); // lee el token guardado (no llama a la API)
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AppProvider(),
-      child: const CineMoodApp(),
+    ChangeNotifierProvider.value(
+      value: app,
+      child: CineMoodApp(inicio: app.haIniciadoSesion ? const PrincipalScreen() : const LoginScreen()),
     ),
   );
 }
 
 class CineMoodApp extends StatelessWidget {
-  const CineMoodApp({super.key});
+  final Widget inicio;
+  const CineMoodApp({super.key, required this.inicio});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'CineMood',
       debugShowCheckedModeBanner: false,
+      navigatorKey: navegadorKey,
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colores.fondo,
@@ -41,7 +48,7 @@ class CineMoodApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      initialRoute: Rutas.login,
+      home: inicio,
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case Rutas.login:
@@ -60,6 +67,8 @@ class CineMoodApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => DetalleScreen(contenido: contenido));
           case Rutas.historial:
             return MaterialPageRoute(builder: (_) => const HistorialScreen());
+          case Rutas.creditos:
+            return MaterialPageRoute(builder: (_) => const CreditosScreen());
         }
         return null;
       },

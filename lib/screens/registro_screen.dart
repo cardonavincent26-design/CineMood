@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
+import '../services/api_service.dart';
 import '../utils/colores.dart';
 import '../utils/rutas.dart';
 import '../widgets/boton_primario.dart';
 import '../widgets/campo_texto.dart';
 
-/// Pantalla 2 · Crear cuenta.
+/// Pantalla 2 · Crear cuenta (se registra en la API y entra directamente).
 class RegistroScreen extends StatefulWidget {
   const RegistroScreen({super.key});
 
@@ -20,6 +21,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
   final _edad = TextEditingController();
   final _correo = TextEditingController();
   final _clave = TextEditingController();
+  bool _cargando = false;
 
   @override
   void dispose() {
@@ -30,22 +32,32 @@ class _RegistroScreenState extends State<RegistroScreen> {
     super.dispose();
   }
 
-  void _registrar() {
+  void _aviso(String texto) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+
+  Future<void> _registrar() async {
     final edad = int.tryParse(_edad.text.trim());
     if (_nombre.text.trim().isEmpty ||
         edad == null ||
-        _correo.text.trim().isEmpty ||
-        _clave.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Completa todos los campos (contraseña de mínimo 6 caracteres)')),
-      );
+        edad < 1 ||
+        edad > 120 ||
+        !_correo.text.contains('@') ||
+        _clave.text.length < 8) {
+      _aviso('Completa todos los campos (contraseña de mínimo 8 caracteres)');
       return;
     }
-    context
-        .read<AppProvider>()
-        .registrar(_nombre.text.trim(), edad, _correo.text.trim());
-    Navigator.pushReplacementNamed(context, Rutas.gustos);
+    setState(() => _cargando = true);
+    try {
+      await context
+          .read<AppProvider>()
+          .registrar(_nombre.text.trim(), edad, _correo.text.trim(), _clave.text);
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, Rutas.gustos, (_) => false);
+    } on ApiException catch (e) {
+      if (mounted) _aviso(e.mensaje);
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 
   @override
@@ -75,9 +87,23 @@ class _RegistroScreenState extends State<RegistroScreen> {
                   etiqueta: 'Correo electrónico',
                   controller: _correo,
                   teclado: TextInputType.emailAddress),
-              CampoTexto(etiqueta: 'Contraseña', controller: _clave, oculto: true),
+              CampoTexto(
+                  etiqueta: 'Contraseña (mínimo 8 caracteres)',
+                  controller: _clave,
+                  oculto: true),
               const SizedBox(height: 16),
-              BotonPrimario(texto: 'Registrarme', onPressed: _registrar),
+              BotonPrimario(
+                texto: _cargando ? 'Creando cuenta...' : 'Registrarme',
+                onPressed: _cargando ? null : _registrar,
+              ),
+              if (_cargando)
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Si hace rato no se usa, el servidor puede tardar hasta un minuto en despertar.',
+                    style: TextStyle(color: Colores.textoSecundario, fontSize: 11),
+                  ),
+                ),
               const SizedBox(height: 14),
               Center(
                 child: TextButton(
