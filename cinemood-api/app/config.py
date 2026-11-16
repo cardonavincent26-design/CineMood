@@ -18,3 +18,6 @@ JWT_SECRET = _requerida("JWT_SECRET")
 JWT_ALGORITMO = "HS256"
 JWT_EXPIRA_MINUTOS = int(os.getenv("JWT_EXPIRA_MINUTOS", "120"))
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+
+# Opcional: si falta, el endpoint /tmdb/buscar responde 503 (el resto de la API funciona igual)
+TMDB_TOKEN = os.getenv("TMDB_TOKEN")

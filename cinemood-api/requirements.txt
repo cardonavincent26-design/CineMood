@@ -7,3 +7,4 @@ pyjwt
 bcrypt
 pydantic[email]
 python-dotenv
+requests

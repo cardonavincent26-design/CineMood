@@ -53,6 +53,7 @@ CREATE TABLE preferencias_generos (
 -- ---------- Catálogo ----------
 CREATE TABLE contenidos (
   id            INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  tmdb_id       INT UNSIGNED NULL,          -- id en TMDB (NULL si se cargó a mano); películas y series tienen ids separados
   titulo        VARCHAR(200) NOT NULL,
   tipo          ENUM('pelicula','serie') NOT NULL,
   genero_id     TINYINT UNSIGNED NOT NULL,
@@ -62,6 +63,7 @@ CREATE TABLE contenidos (
   sinopsis      TEXT NOT NULL,
   imagen_url    VARCHAR(300) NULL,
   FOREIGN KEY (genero_id) REFERENCES generos(id),
+  UNIQUE KEY uq_tipo_tmdb (tipo, tmdb_id),
   INDEX idx_tipo_genero (tipo, genero_id)
 );
 
