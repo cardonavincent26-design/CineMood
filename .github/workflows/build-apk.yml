@@ -28,9 +28,13 @@ jobs:
           channel: stable
           cache: true
 
-      # Si el repositorio no incluye la carpeta android/, se genera aquí (no toca lib/).
-      - name: Preparar plataforma Android
-        run: flutter create . --platforms=android --project-name cinemood
+      # La carpeta android/ guardada en el repositorio la creó tu Flutter local y puede ser de una
+      # versión distinta a la del servidor (por eso fallaba con "Android Gradle Plugin ... lower than
+      # Flutter's minimum"). Se regenera aquí con la misma versión de Flutter que compila. No toca lib/.
+      - name: Regenerar plataforma Android
+        run: |
+          rm -rf android
+          flutter create . --platforms=android --project-name cinemood
 
       - run: flutter pub get
 
