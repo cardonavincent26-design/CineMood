@@ -4,3 +4,7 @@ build/
 
 .idea/
 *.iml
+
+hs_err_pid*.log
+hs_err_pid*.log
+.flutter-plugins-dependencies

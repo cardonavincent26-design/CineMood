@@ -1,0 +1,43 @@
+# Compila la app Android en los servidores de GitHub (no en tu computador).
+# Se ejecuta al subir cambios de la app a main, o a mano: pestaña Actions > "Compilar APK" > Run workflow.
+# Al terminar, el APK queda para descargar en la sección "Artifacts" de esa ejecución.
+name: Compilar APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "pubspec.yaml"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Si el repositorio no incluye la carpeta android/, se genera aquí (no toca lib/).
+      - name: Preparar plataforma Android
+        run: flutter create . --platforms=android --project-name cinemood
+
+      - run: flutter pub get
+
+      # Compilación "debug": incluye el permiso de internet y se instala directo en el celular.
+      - run: flutter build apk --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cinemood-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
