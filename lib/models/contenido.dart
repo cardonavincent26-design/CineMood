@@ -19,6 +19,9 @@ class Contenido {
   /// URL del póster (viene de TMDB). Puede ser null.
   final String? imagenUrl;
 
+  /// Póster en tamaño grande (TMDB ofrece el mismo archivo en varios anchos).
+  String? get imagenGrande => imagenUrl?.replaceFirst('/w500/', '/w780/');
+
   /// Solo lo usa el catálogo de ejemplo antiguo (data/catalogo_data.dart); la API ya no lo envía.
   final Map<String, double> afinidadAnimo;
 

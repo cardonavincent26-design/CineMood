@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../utils/colores.dart';
 
 /// Póster de un contenido (imagen de TMDB). Si no hay imagen o falla la carga,
-/// muestra un ícono. Sin ancho/alto, ocupa el espacio que le dé su contenedor.
+/// prueba con [respaldo] y, si tampoco carga, muestra un ícono.
+/// Sin ancho/alto, ocupa el espacio que le dé su contenedor.
 class Poster extends StatelessWidget {
   final String? url;
+  final String? respaldo;
   final double? ancho;
   final double? alto;
   final double radio;
@@ -14,6 +16,7 @@ class Poster extends StatelessWidget {
   const Poster({
     super.key,
     required this.url,
+    this.respaldo,
     this.ancho,
     this.alto,
     this.radio = 10,
@@ -28,21 +31,26 @@ class Poster extends StatelessWidget {
         ),
       );
 
+  Widget _imagen(String direccion, {String? siFalla}) {
+    return Image.network(
+      direccion,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => siFalla == null ? _vacio() : _imagen(siFalla),
+      loadingBuilder: (_, hijo, progreso) => progreso == null ? hijo : _vacio(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final principal = url ?? respaldo;
     return ClipRRect(
       borderRadius: BorderRadius.circular(radio),
       child: SizedBox(
         width: ancho,
         height: alto,
-        child: url == null
+        child: principal == null
             ? _vacio()
-            : Image.network(
-                url!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _vacio(),
-                loadingBuilder: (_, hijo, progreso) => progreso == null ? hijo : _vacio(),
-              ),
+            : _imagen(principal, siFalla: url != null && url != respaldo ? respaldo : null),
       ),
     );
   }
