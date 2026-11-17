@@ -41,9 +41,24 @@ def recomendar(
     tiempo: Optional[Tiempo] = Query(None, description="Tiempo disponible"),
     generos: list[str] = Query([], description="Géneros de interés (repite el parámetro)"),
     limite: int = Query(20, ge=1, le=100),
+    excluir_decididos: bool = Query(
+        True, description="Oculta lo que el usuario ya descartó, marcó con interés o guardó en su lista"
+    ),
+    usuario: dict = Depends(usuario_actual),
     db=Depends(get_db),
 ):
     _validar_generos(db, generos)
+
+    union, filtro = "", ""
+    params = {"animo": animo, "tipo": tipo}
+    if excluir_decididos:
+        union = (
+            "LEFT JOIN valoraciones v ON v.contenido_id = c.id AND v.usuario_id = :uid "
+            "LEFT JOIN mi_lista ml ON ml.contenido_id = c.id AND ml.usuario_id = :uid "
+        )
+        filtro = " AND v.interes IS NULL AND ml.contenido_id IS NULL"
+        params["uid"] = usuario["id"]
+
     filas = db.execute(
         text(
             f"""
@@ -54,10 +69,11 @@ def recomendar(
             JOIN generos g ON g.id = c.genero_id
             LEFT JOIN afinidad_animo a
                    ON a.contenido_id = c.id AND a.estado_animo_id = {SUBCONSULTA_ANIMO}
-            WHERE c.tipo = :tipo
+            {union}
+            WHERE c.tipo = :tipo{filtro}
             """
         ),
-        {"animo": animo, "tipo": tipo},
+        params,
     ).all()
 
     resultado = []

@@ -12,9 +12,15 @@ import '../services/api_service.dart';
 import '../utils/navegador.dart';
 import '../utils/rutas.dart';
 
+/// Una decisión tomada al deslizar una tarjeta (para poder deshacerla).
+class _Decision {
+  final Recomendacion recomendacion;
+  final bool guardado;
+  const _Decision(this.recomendacion, this.guardado);
+}
+
 /// Estado compartido por varias pantallas: sesión, preferencias, mood y recomendaciones.
-/// Los datos del catálogo y la compatibilidad vienen de la API (FastAPI).
-/// Mi lista e historial siguen siendo locales por ahora (aún no hay endpoints para ellos).
+/// Los datos (catálogo, compatibilidad, Mi lista, historial, valoraciones) viven en la API.
 class AppProvider extends ChangeNotifier {
   final ApiService api = ApiService();
 
@@ -23,14 +29,20 @@ class AppProvider extends ChangeNotifier {
   EstadoAnimo estadoAnimo = EstadoAnimo.feliz;
 
   List<String> generos = [];
+
+  /// El "mazo" de tarjetas: la primera es la que se ve arriba.
   List<Recomendacion> recomendaciones = [];
   bool cargandoRecomendaciones = false;
   String? errorRecomendaciones;
   int _versionRecomendaciones = 0;
   final Map<int, int> _compatibilidades = {};
 
+  final List<_Decision> _pila = []; // decisiones del swipe, para deshacer
+  final Set<int> _decididos = {}; // ids ya deslizados en esta sesión
+
   final List<Contenido> _miLista = [];
   final List<Contenido> _historial = [];
+  bool _datosCargados = false;
 
   static const _claveToken = 'token';
   static const _claveUsuario = 'usuario';
@@ -40,6 +52,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   bool get haIniciadoSesion => usuario != null;
+  bool get puedeDeshacer => _pila.isNotEmpty;
   List<Contenido> get miLista => List.unmodifiable(_miLista);
   List<Contenido> get historial => List.unmodifiable(_historial);
 
@@ -89,8 +102,11 @@ class AppProvider extends ChangeNotifier {
     recomendaciones = [];
     errorRecomendaciones = null;
     _compatibilidades.clear();
+    _pila.clear();
+    _decididos.clear();
     _miLista.clear();
     _historial.clear();
+    _datosCargados = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_claveToken);
     await prefs.remove(_claveUsuario);
@@ -104,7 +120,7 @@ class AppProvider extends ChangeNotifier {
     navegadorKey.currentState?.pushNamedAndRemoveUntil(Rutas.login, (_) => false);
   }
 
-  // ---- Catálogos ----
+  // ---- Catálogos y datos del usuario ----
   Future<void> cargarGeneros() async {
     if (generos.isNotEmpty) return;
     try {
@@ -112,6 +128,24 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } on ApiException {
       // Se reintenta la próxima vez que una pantalla los pida.
+    }
+  }
+
+  /// Carga Mi lista e historial desde la API (una sola vez por sesión).
+  Future<void> cargarDatosUsuario() async {
+    if (usuario == null || _datosCargados) return;
+    _datosCargados = true;
+    try {
+      final resultados = await Future.wait([api.miLista(), api.historial()]);
+      _miLista
+        ..clear()
+        ..addAll(resultados[0]);
+      _historial
+        ..clear()
+        ..addAll(resultados[1]);
+      notifyListeners();
+    } on ApiException {
+      _datosCargados = false; // se reintenta la próxima vez
     }
   }
 
@@ -125,7 +159,7 @@ class AppProvider extends ChangeNotifier {
     try {
       final r = await api.recomendaciones(estadoAnimo, preferencias);
       if (mia != _versionRecomendaciones) return; // llegó una petición más nueva
-      recomendaciones = r;
+      recomendaciones = r.where((x) => !_decididos.contains(x.contenido.id)).toList();
     } on ApiException catch (e) {
       if (mia != _versionRecomendaciones) return;
       recomendaciones = [];
@@ -147,6 +181,52 @@ class AppProvider extends ChangeNotifier {
     return valor;
   }
 
+  // ---- Swipe: derecha = guardar, izquierda = descartar ----
+  /// Devuelve un mensaje de error (si no se pudo guardar) o null si todo salió bien.
+  Future<String?> decidir(Recomendacion rec, {required bool guardar}) async {
+    final decision = _Decision(rec, guardar);
+    final id = rec.contenido.id;
+    recomendaciones = recomendaciones.where((r) => r.contenido.id != id).toList();
+    _decididos.add(id);
+    _pila.add(decision);
+    if (guardar && !estaEnLista(rec.contenido)) _miLista.insert(0, rec.contenido);
+    notifyListeners();
+
+    try {
+      if (guardar) await api.agregarALista(id);
+      await api.valorar(id, guardar ? 'interesa' : 'no_interesa');
+    } on ApiException catch (e) {
+      // No se pudo guardar: la tarjeta vuelve al mazo.
+      _pila.remove(decision);
+      _decididos.remove(id);
+      if (guardar) _miLista.removeWhere((x) => x.id == id);
+      recomendaciones = [rec, ...recomendaciones];
+      notifyListeners();
+      return e.mensaje;
+    }
+
+    // Se está acabando el mazo: se piden más (la API ya no devuelve las decididas).
+    if (recomendaciones.length < 4 && !cargandoRecomendaciones) cargarRecomendaciones();
+    return null;
+  }
+
+  Future<String?> deshacer() async {
+    if (_pila.isEmpty) return null;
+    final d = _pila.removeLast();
+    final id = d.recomendacion.contenido.id;
+    _decididos.remove(id);
+    recomendaciones = [d.recomendacion, ...recomendaciones.where((r) => r.contenido.id != id)];
+    if (d.guardado) _miLista.removeWhere((x) => x.id == id);
+    notifyListeners();
+    try {
+      await api.quitarValoracion(id);
+      if (d.guardado) await api.quitarDeLista(id);
+    } on ApiException catch (e) {
+      return e.mensaje;
+    }
+    return null;
+  }
+
   // ---- Preferencias y mood ----
   void guardarPreferencias(Preferencias nuevas) {
     preferencias = nuevas;
@@ -162,21 +242,45 @@ class AppProvider extends ChangeNotifier {
     cargarRecomendaciones();
   }
 
-  // ---- Mi lista e historial (locales por ahora) ----
+  // ---- Mi lista e historial (guardados en la API) ----
   bool estaEnLista(Contenido c) => _miLista.any((x) => x.id == c.id);
 
-  void alternarEnLista(Contenido c) {
-    if (estaEnLista(c)) {
+  /// Agrega o quita de Mi lista. Devuelve un mensaje de error o null.
+  Future<String?> alternarEnLista(Contenido c) async {
+    final estaba = estaEnLista(c);
+    if (estaba) {
       _miLista.removeWhere((x) => x.id == c.id);
     } else {
-      _miLista.add(c);
+      _miLista.insert(0, c);
     }
     notifyListeners();
+    try {
+      if (estaba) {
+        await api.quitarDeLista(c.id);
+      } else {
+        await api.agregarALista(c.id);
+      }
+      return null;
+    } on ApiException catch (e) {
+      if (estaba) {
+        _miLista.insert(0, c);
+      } else {
+        _miLista.removeWhere((x) => x.id == c.id);
+      }
+      notifyListeners();
+      return e.mensaje;
+    }
   }
 
-  void marcarComoVisto(Contenido c) {
+  Future<String?> marcarComoVisto(Contenido c) async {
     _historial.removeWhere((x) => x.id == c.id);
     _historial.insert(0, c);
     notifyListeners();
+    try {
+      await api.registrarVisto(c.id);
+      return null;
+    } on ApiException catch (e) {
+      return e.mensaje;
+    }
   }
 }

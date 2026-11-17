@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/recomendacion.dart';
 import '../providers/app_provider.dart';
 import '../utils/colores.dart';
 import '../utils/rutas.dart';
-import '../widgets/recomendacion_card.dart';
+import '../widgets/tarjeta_deslizable.dart';
+import '../widgets/tarjeta_pelicula.dart';
 
-/// Pantalla 5 · ¿Qué quieres ver hoy? (recomendaciones por mood, calculadas por la API).
+/// Pantalla 5 · ¿Qué quieres ver hoy? Recomendaciones por mood en forma de mazo de tarjetas:
+/// deslizar a la derecha guarda en Mi lista, a la izquierda descarta. La API calcula todo.
 class InicioScreen extends StatefulWidget {
   const InicioScreen({super.key});
 
@@ -15,24 +18,54 @@ class InicioScreen extends StatefulWidget {
 }
 
 class _InicioScreenState extends State<InicioScreen> {
-  int _desplazamiento = 0; // permite pedir "otra recomendación" (RF-010)
+  final _tarjeta = GlobalKey<TarjetaDeslizableState>();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final app = context.read<AppProvider>();
+      app.cargarDatosUsuario();
       if (app.recomendaciones.isEmpty && !app.cargandoRecomendaciones) {
         app.cargarRecomendaciones();
       }
     });
   }
 
-  Widget _contenido(AppProvider app) {
-    final todas = app.recomendaciones;
-    final n = todas.length;
+  void _aviso(String? error) {
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
 
-    if (app.cargandoRecomendaciones && n == 0) {
+  Future<void> _decidir(Recomendacion rec, bool guardar) async {
+    final error = await context.read<AppProvider>().decidir(rec, guardar: guardar);
+    _aviso(error);
+  }
+
+  Future<void> _deshacer() async {
+    final error = await context.read<AppProvider>().deshacer();
+    _aviso(error);
+  }
+
+  Widget _mensaje(String texto, {Widget? accion}) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(texto,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colores.textoSecundario)),
+          if (accion != null) accion,
+        ],
+      ),
+    );
+  }
+
+  Widget _mazo(AppProvider app) {
+    final recs = app.recomendaciones;
+
+    if (app.cargandoRecomendaciones && recs.isEmpty) {
       return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -47,37 +80,74 @@ class _InicioScreenState extends State<InicioScreen> {
       );
     }
     if (app.errorRecomendaciones != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(app.errorRecomendaciones!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colores.textoSecundario)),
-            TextButton(
-              onPressed: () => context.read<AppProvider>().cargarRecomendaciones(),
-              child: const Text('Reintentar'),
-            ),
-          ],
+      return _mensaje(
+        app.errorRecomendaciones!,
+        accion: TextButton(
+          onPressed: () => context.read<AppProvider>().cargarRecomendaciones(),
+          child: const Text('Reintentar'),
         ),
       );
     }
-    if (n == 0) {
-      return const Center(
-        child: Text('No hay contenido para tus preferencias.',
-            style: TextStyle(color: Colores.textoSecundario)),
+    if (recs.isEmpty) {
+      return _mensaje(
+        'Ya revisaste todo lo recomendado para este mood.\nCambia tu mood o tus preferencias para ver más.',
+        accion: TextButton(
+          onPressed: () => context.read<AppProvider>().cargarRecomendaciones(),
+          child: const Text('Buscar de nuevo'),
+        ),
       );
     }
 
-    final visibles = [for (var i = 0; i < n && i < 5; i++) todas[(i + _desplazamiento) % n]];
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: visibles.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 12),
-      itemBuilder: (_, i) => RecomendacionCard(
-        recomendacion: visibles[i],
-        onTap: () =>
-            Navigator.pushNamed(context, Rutas.detalle, arguments: visibles[i].contenido),
+    final actual = recs.first;
+    final siguiente = recs.length > 1 ? recs[1] : null;
+
+    return Stack(
+      children: [
+        if (siguiente != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Transform.scale(
+                scale: 0.94,
+                child: Opacity(
+                  opacity: 0.7,
+                  child: TarjetaPelicula(recomendacion: siguiente, onTap: () {}),
+                ),
+              ),
+            ),
+          ),
+        Positioned.fill(
+          child: TarjetaDeslizable(
+            key: _tarjeta,
+            id: actual.contenido.id,
+            onGuardar: () => _decidir(actual, true),
+            onDescartar: () => _decidir(actual, false),
+            child: TarjetaPelicula(
+              recomendacion: actual,
+              onTap: () =>
+                  Navigator.pushNamed(context, Rutas.detalle, arguments: actual.contenido),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _boton(IconData icono, Color color, double tamano, VoidCallback? onPressed,
+      String ayuda) {
+    return Tooltip(
+      message: ayuda,
+      child: Material(
+        color: Colores.superficie,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Padding(
+            padding: EdgeInsets.all(tamano * 0.4),
+            child: Icon(icono,
+                size: tamano, color: onPressed == null ? Colores.textoSecundario : color),
+          ),
+        ),
       ),
     );
   }
@@ -85,9 +155,10 @@ class _InicioScreenState extends State<InicioScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final hayMazo = app.recomendaciones.isNotEmpty;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -113,25 +184,30 @@ class _InicioScreenState extends State<InicioScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
+          Expanded(child: _mazo(app)),
+          const SizedBox(height: 14),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('Recomendado para ti',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              IconButton(
-                tooltip: 'Otra recomendación',
-                onPressed: () => setState(() => _desplazamiento++),
-                icon: const Icon(Icons.refresh, color: Colores.primario),
-              ),
+              _boton(Icons.close, Colors.redAccent, 28,
+                  hayMazo ? () => _tarjeta.currentState?.salir(derecha: false) : null,
+                  'Descartar'),
+              const SizedBox(width: 18),
+              _boton(Icons.undo, Colores.textoSecundario, 20,
+                  app.puedeDeshacer ? _deshacer : null, 'Deshacer'),
+              const SizedBox(width: 18),
+              _boton(Icons.favorite, Colors.greenAccent, 28,
+                  hayMazo ? () => _tarjeta.currentState?.salir(derecha: true) : null,
+                  'Guardar en Mi lista'),
             ],
           ),
           const SizedBox(height: 8),
-          Expanded(child: _contenido(app)),
+          const Center(
+            child: Text('Desliza a la derecha para guardar · a la izquierda para descartar',
+                style: TextStyle(color: Colores.textoSecundario, fontSize: 11)),
+          ),
           const SizedBox(height: 12),
-          const Text('Porque coincide con tus gustos y tu estado de ánimo.',
-              style: TextStyle(color: Colores.textoSecundario, fontSize: 11)),
-          const SizedBox(height: 20),
         ],
       ),
     );

@@ -47,12 +47,16 @@ class ApiService {
 
     http.Response r;
     try {
-      if (metodo == 'GET') {
-        r = await http.get(uri, headers: _cabeceras).timeout(apiTimeout);
-      } else {
-        r = await http
-            .post(uri, headers: _cabeceras, body: jsonEncode(cuerpo))
-            .timeout(apiTimeout);
+      final body = cuerpo == null ? null : jsonEncode(cuerpo);
+      switch (metodo) {
+        case 'GET':
+          r = await http.get(uri, headers: _cabeceras).timeout(apiTimeout);
+        case 'DELETE':
+          r = await http.delete(uri, headers: _cabeceras).timeout(apiTimeout);
+        case 'PUT':
+          r = await http.put(uri, headers: _cabeceras, body: body).timeout(apiTimeout);
+        default:
+          r = await http.post(uri, headers: _cabeceras, body: body).timeout(apiTimeout);
       }
     } on TimeoutException {
       throw const ApiException('El servidor tardó demasiado en responder. Intenta de nuevo.');
@@ -148,4 +152,28 @@ class ApiService {
         params: _paramsRecomendacion(animo, p));
     return d['compatibilidad'] as int;
   }
+
+  // ---- Mi actividad (swipe, mi lista, historial) ----
+  Future<List<Contenido>> miLista() async {
+    final d = await _enviar('GET', '/mi-lista');
+    return [for (final j in d as List) Contenido.fromJson(j as Map<String, dynamic>)];
+  }
+
+  Future<void> agregarALista(int contenidoId) => _enviar('POST', '/mi-lista/$contenidoId');
+
+  Future<void> quitarDeLista(int contenidoId) => _enviar('DELETE', '/mi-lista/$contenidoId');
+
+  /// [interes] es 'interesa' o 'no_interesa'.
+  Future<void> valorar(int contenidoId, String interes) =>
+      _enviar('PUT', '/valoraciones/$contenidoId', cuerpo: {'interes': interes});
+
+  Future<void> quitarValoracion(int contenidoId) =>
+      _enviar('DELETE', '/valoraciones/$contenidoId');
+
+  Future<List<Contenido>> historial() async {
+    final d = await _enviar('GET', '/historial');
+    return [for (final j in d as List) Contenido.fromJson(j as Map<String, dynamic>)];
+  }
+
+  Future<void> registrarVisto(int contenidoId) => _enviar('POST', '/historial/$contenidoId');
 }
