@@ -9,7 +9,7 @@ import '../widgets/tarjeta_deslizable.dart';
 import '../widgets/tarjeta_pelicula.dart';
 
 /// Pantalla 5 · ¿Qué quieres ver hoy? Recomendaciones por mood en forma de mazo de tarjetas:
-/// deslizar a la derecha guarda en Mi lista, a la izquierda descarta. La API calcula todo.
+/// deslizar a la derecha guarda en Mi lista, a la izquierda es "ahora no". La API calcula todo.
 class InicioScreen extends StatefulWidget {
   const InicioScreen({super.key});
 
@@ -192,7 +192,7 @@ class _InicioScreenState extends State<InicioScreen> {
             children: [
               _boton(Icons.close, Colors.redAccent, 28,
                   hayMazo ? () => _tarjeta.currentState?.salir(derecha: false) : null,
-                  'Descartar'),
+                  'Ahora no'),
               const SizedBox(width: 18),
               _boton(Icons.undo, Colores.textoSecundario, 20,
                   app.puedeDeshacer ? _deshacer : null, 'Deshacer'),
@@ -204,7 +204,7 @@ class _InicioScreenState extends State<InicioScreen> {
           ),
           const SizedBox(height: 8),
           const Center(
-            child: Text('Desliza a la derecha para guardar · a la izquierda para descartar',
+            child: Text('Derecha: guardar en Mi lista · Izquierda: ahora no (puede volver)',
                 style: TextStyle(color: Colores.textoSecundario, fontSize: 11)),
           ),
           const SizedBox(height: 12),

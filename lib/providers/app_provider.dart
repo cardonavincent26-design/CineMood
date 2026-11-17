@@ -194,7 +194,8 @@ class AppProvider extends ChangeNotifier {
 
     try {
       if (guardar) await api.agregarALista(id);
-      await api.valorar(id, guardar ? 'interesa' : 'no_interesa');
+      // Izquierda = "ahora no": se oculta con este mood por 7 días, luego puede volver.
+      await api.valorar(id, guardar ? 'interesa' : 'ahora_no', animo: estadoAnimo.name);
     } on ApiException catch (e) {
       // No se pudo guardar: la tarjeta vuelve al mazo.
       _pila.remove(decision);
@@ -227,6 +228,19 @@ class AppProvider extends ChangeNotifier {
     return null;
   }
 
+  /// "No me interesa nunca": se oculta de las recomendaciones para siempre.
+  Future<String?> noMeInteresaNunca(Contenido c) async {
+    try {
+      await api.valorar(c.id, 'no_interesa', animo: estadoAnimo.name);
+    } on ApiException catch (e) {
+      return e.mensaje;
+    }
+    recomendaciones = recomendaciones.where((r) => r.contenido.id != c.id).toList();
+    _decididos.add(c.id);
+    notifyListeners();
+    return null;
+  }
+
   // ---- Preferencias y mood ----
   void guardarPreferencias(Preferencias nuevas) {
     preferencias = nuevas;
@@ -238,6 +252,9 @@ class AppProvider extends ChangeNotifier {
   void cambiarEstadoAnimo(EstadoAnimo animo) {
     estadoAnimo = animo;
     _compatibilidades.clear();
+    // Con otro mood, lo descartado antes con "ahora no" puede volver a salir.
+    _decididos.clear();
+    _pila.clear();
     notifyListeners();
     cargarRecomendaciones();
   }

@@ -42,7 +42,7 @@ def recomendar(
     generos: list[str] = Query([], description="Géneros de interés (repite el parámetro)"),
     limite: int = Query(20, ge=1, le=100),
     excluir_decididos: bool = Query(
-        True, description="Oculta lo que el usuario ya descartó, marcó con interés o guardó en su lista"
+        True, description="Oculta lo guardado, lo 'no me interesa nunca' y lo pospuesto ('ahora no') 7 días con el mismo ánimo"
     ),
     usuario: dict = Depends(usuario_actual),
     db=Depends(get_db),
@@ -56,7 +56,15 @@ def recomendar(
             "LEFT JOIN valoraciones v ON v.contenido_id = c.id AND v.usuario_id = :uid "
             "LEFT JOIN mi_lista ml ON ml.contenido_id = c.id AND ml.usuario_id = :uid "
         )
-        filtro = " AND v.interes IS NULL AND ml.contenido_id IS NULL"
+        # Se oculta lo que está en Mi lista, lo marcado "no me interesa nunca" y lo pospuesto
+        # ("ahora no") en los últimos 7 días con este mismo ánimo. COALESCE evita que un NULL
+        # (sin valoración) deje fuera al contenido.
+        filtro = (
+            " AND ml.contenido_id IS NULL"
+            " AND NOT COALESCE(v.interes = 'no_interesa' OR (v.interes = 'ahora_no'"
+            " AND v.actualizado_en >= NOW() - INTERVAL 7 DAY"
+            f" AND (v.animo_id IS NULL OR v.animo_id = {SUBCONSULTA_ANIMO})), FALSE)"
+        )
         params["uid"] = usuario["id"]
 
     filas = db.execute(

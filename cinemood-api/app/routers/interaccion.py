@@ -9,6 +9,7 @@ from ..database import get_db
 from ..deps import usuario_actual
 from ..schemas import ContenidoOut
 from .contenidos import SELECT_BASE
+from .recomendaciones import EstadoAnimo
 
 router = APIRouter(tags=["Mi actividad"])
 
@@ -56,8 +57,10 @@ def quitar_de_lista(contenido_id: int, usuario: dict = Depends(usuario_actual), 
 
 # ------------------------------------------------------- Valoraciones (RF-011)
 class ValoracionIn(BaseModel):
-    interes: Optional[Literal["interesa", "no_interesa"]] = None
+    # interesa = me gusta · ahora_no = ocultar 7 días con este ánimo · no_interesa = nunca más
+    interes: Optional[Literal["interesa", "ahora_no", "no_interesa"]] = None
     puntaje: Optional[int] = Field(None, ge=1, le=5)
+    animo: Optional[EstadoAnimo] = None  # estado de ánimo con el que se decidió
 
 
 @router.put("/valoraciones/{contenido_id}", **SIN_CONTENIDO)
@@ -67,15 +70,17 @@ def valorar(
     usuario: dict = Depends(usuario_actual),
     db=Depends(get_db),
 ):
-    """Guarda si el contenido interesa o no (y/o un puntaje de 1 a 5). Se puede repetir."""
+    """Guarda si el contenido interesa, se pospone o no interesa nunca (y/o un puntaje de 1 a 5)."""
     _debe_existir(db, contenido_id)
+    animo_id = "(SELECT id FROM estados_animo WHERE codigo = :a)"
     db.execute(
         text(
-            "INSERT INTO valoraciones (usuario_id, contenido_id, puntaje, interes) "
-            "VALUES (:u, :c, :p, :i) "
-            "ON DUPLICATE KEY UPDATE puntaje = :p, interes = :i"
+            "INSERT INTO valoraciones (usuario_id, contenido_id, puntaje, interes, animo_id) "
+            f"VALUES (:u, :c, :p, :i, {animo_id}) "
+            f"ON DUPLICATE KEY UPDATE puntaje = :p, interes = :i, animo_id = {animo_id}, "
+            "actualizado_en = CURRENT_TIMESTAMP"  # reinicia los 7 días si se vuelve a posponer
         ),
-        {"u": usuario["id"], "c": contenido_id, "p": datos.puntaje, "i": datos.interes},
+        {"u": usuario["id"], "c": contenido_id, "p": datos.puntaje, "i": datos.interes, "a": datos.animo},
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

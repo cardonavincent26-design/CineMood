@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Hace que su contenido se pueda arrastrar como en Tinder:
-/// derecha = guardar, izquierda = descartar. Sin librerías externas.
+/// derecha = guardar, izquierda = "ahora no". Sin librerías externas.
 /// [id] identifica la tarjeta: si cambia, el estado del arrastre se reinicia.
 class TarjetaDeslizable extends StatefulWidget {
   final int id;
@@ -127,7 +127,7 @@ class TarjetaDeslizableState extends State<TarjetaDeslizable>
                     top: 26,
                     right: 20,
                     child: _Sello(
-                      texto: 'DESCARTAR',
+                      texto: 'AHORA NO',
                       color: Colors.redAccent,
                       opacidad: (-progreso).clamp(0.0, 1.0).toDouble(),
                       angulo: 0.2,

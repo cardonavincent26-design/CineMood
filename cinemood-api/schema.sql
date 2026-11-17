@@ -103,9 +103,11 @@ CREATE TABLE valoraciones (
   usuario_id    INT UNSIGNED NOT NULL,
   contenido_id  INT UNSIGNED NOT NULL,
   puntaje       TINYINT UNSIGNED NULL CHECK (puntaje BETWEEN 1 AND 5),
-  interes       ENUM('interesa','no_interesa') NULL,
+  interes       ENUM('interesa','no_interesa','ahora_no') NULL,  -- ahora_no: se oculta 7 días con ese ánimo
+  animo_id      TINYINT UNSIGNED NULL,                           -- ánimo con el que se decidió
   actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (usuario_id, contenido_id),
+  FOREIGN KEY (animo_id)     REFERENCES estados_animo(id),
   FOREIGN KEY (usuario_id)   REFERENCES usuarios(id)   ON DELETE CASCADE,
   FOREIGN KEY (contenido_id) REFERENCES contenidos(id) ON DELETE CASCADE
 );

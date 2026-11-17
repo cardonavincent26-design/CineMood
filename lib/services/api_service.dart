@@ -163,9 +163,11 @@ class ApiService {
 
   Future<void> quitarDeLista(int contenidoId) => _enviar('DELETE', '/mi-lista/$contenidoId');
 
-  /// [interes] es 'interesa' o 'no_interesa'.
-  Future<void> valorar(int contenidoId, String interes) =>
-      _enviar('PUT', '/valoraciones/$contenidoId', cuerpo: {'interes': interes});
+  /// [interes] es 'interesa', 'ahora_no' (se oculta 7 días con ese mood) o 'no_interesa' (para siempre).
+  /// [animo] es el estado de ánimo con el que se decidió.
+  Future<void> valorar(int contenidoId, String interes, {String? animo}) =>
+      _enviar('PUT', '/valoraciones/$contenidoId',
+          cuerpo: {'interes': interes, if (animo != null) 'animo': animo});
 
   Future<void> quitarValoracion(int contenidoId) =>
       _enviar('DELETE', '/valoraciones/$contenidoId');

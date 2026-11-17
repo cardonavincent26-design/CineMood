@@ -43,6 +43,17 @@ class _DetalleScreenState extends State<DetalleScreen> {
     if (error != null && mounted) _aviso(error);
   }
 
+  Future<void> _noMeInteresa() async {
+    final error = await context.read<AppProvider>().noMeInteresaNunca(widget.contenido);
+    if (!mounted) return;
+    if (error != null) {
+      _aviso(error);
+      return;
+    }
+    _aviso('Listo: no volverá a salir en tus recomendaciones.');
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final contenido = widget.contenido;
@@ -165,7 +176,15 @@ class _DetalleScreenState extends State<DetalleScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton(
+                      onPressed: _noMeInteresa,
+                      child: const Text('No me interesa nunca',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   const Text('Datos e imágenes: TMDB',
                       style: TextStyle(color: Colores.textoSecundario, fontSize: 10)),
                 ],
